@@ -1,2 +1,8 @@
 # ArtisticPhotoshop
-Simple photoshop using openCV
+#### 프로젝트 소개
+- openCV 함수를 이용해 간단한 포토샵을 구현한다.  
+
+#### 프로젝트 계획 - 예정 기능
+- 이미지 불러오기, 저장
+- 크롭, 회전, 원근감 조절
+- 밝기, 노출, 대조, 선명도를 트랙바를 이용해 비율 조절
