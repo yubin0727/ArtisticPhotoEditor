@@ -17,12 +17,12 @@ def openImg(): # file Path 탐색 및 이미지 열기
                                       filetypes=(('jpg files', '*.jpg'), ('png files', '*.png'), ('all files', '*.*')))
     if imgPath: # 이미지 읽기, 보여주기
         img = cv.imread(imgPath)
-        showImg()
+        showImg(img)
 
-def showImg(): # 이미지 크기 조절, 보여주기
-    global canvas, ratio, img, startx, starty, endx, endy
+def showImg(img): # 이미지 크기 조절, 보여주기
+    global canvas, ratio, startx, starty, endx, endy
     # show_image -> 사용자에게 보여주는 이미지, resize
-    showImg = img
+    showingImg = img
 
     height, width = img.shape[:2]
     if width > MAX_SIZE or height > MAX_SIZE:
@@ -34,15 +34,15 @@ def showImg(): # 이미지 크기 조절, 보여주기
             ratio = MAX_SIZE / height
             new_height = MAX_SIZE
             new_width = int(width * ratio)
-        showImg = cv.resize(img, (new_width, new_height))
-    image_pil = Image.fromarray(cv.cvtColor(showImg, cv.COLOR_BGR2RGB))
+        showingImg = cv.resize(img, (new_width, new_height))
+    image_pil = Image.fromarray(cv.cvtColor(showingImg, cv.COLOR_BGR2RGB))
     selectedImage = ImageTk.PhotoImage(image_pil)
     
     canvas.delete("all") 
     canvas.create_image(MAX_SIZE/2, MAX_SIZE/2, anchor="center", image=selectedImage)
     canvas.image = selectedImage
-    startx = int((800 - showImg.shape[1]) / 2)
-    starty = int((800 - showImg.shape[0]) / 2)
+    startx = int((800 - showingImg.shape[1]) / 2)
+    starty = int((800 - showingImg.shape[0]) / 2)
     endx = 800 - startx
     endy = 800 - starty
 
@@ -71,7 +71,8 @@ def changeColor(btn): # button up&down
         btn["background"] = "#ECE6CC"
         btn["relief"] = "sunken"
         curBtn=btn
-
+        
+# 이미지 자를 영역 선택, 자르기
 def startRectangle(event):
     global top, bottom, area, canvas
     if not area:
@@ -127,8 +128,9 @@ def cropImg(btn, areaBtn): # 이미지 자르기
         img = img[left_y:right_y, left_x:right_x]
     top = (0, 0)
     bottom = (0, 0)
-    showImg()      
+    showImg(img)      
 
+# 이미지 회전
 def rotaImg(btn):
     global img, curBtn
     
@@ -139,8 +141,9 @@ def rotaImg(btn):
         curBtn = None
     
     img = cv.rotate(img, cv.ROTATE_90_CLOCKWISE)
-    showImg()
+    showImg(img)
 
+# 확인 버튼
 def makeEndMode(btn):
     global editFrame
     endBtn = Button(editFrame, text="OK", width=8, height=2, padx=0, pady=0, relief="raised", font="Arial 9", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:finishImg(btn))
@@ -157,10 +160,38 @@ def finishImg(btn):
     
     img = editedImg
     clearFrame()
-    showImg()
+    showImg(img)
     
+# 원근감 조절
+def controlPers(value):
+    global persX, persY, editedImg, img, ratio
+    
+    persRatio = 2 / ratio
+    # 이미지의 크기 및 좌표 계산
+    src_points = np.float32([[0, 0],
+                             [img.shape[1], 0],
+                             [0, img.shape[0]], 
+                             [img.shape[1], img.shape[0]]])
+    
+    horizontal_dist = np.float32([[0, persX.get() * persRatio],
+                              [img.shape[1], 0],
+                              [0, img.shape[0] - persX.get() * persRatio],
+                              [img.shape[1], img.shape[0]]])
+    horizontal_matrix = cv.getPerspectiveTransform(src_points, horizontal_dist)
+    
+    vertical_dist = np.float32([[persY.get() * persRatio, 0],
+                                  [img.shape[1] - persY.get() * persRatio, 0],
+                                  [0, img.shape[0]],
+                                  [img.shape[1], img.shape[0]]])
+    vertical_matrix = cv.getPerspectiveTransform(src_points, vertical_dist)
+    M = np.matmul(horizontal_matrix, vertical_matrix)
+
+    
+    editedImg = cv.warpPerspective(img, M, (img.shape[1], img.shape[0]))
+    showImg(editedImg)
+
 def persImg(btn):
-    global editFrame, editedImg, img
+    global editFrame, editedImg, img, persX, persY
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         endBtn = Button(editFrame, text="OK", width=8, height=2, padx=0, pady=0, relief="raised", font="Arial 9", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:finishImg(btn))
@@ -168,15 +199,22 @@ def persImg(btn):
         mode = Label(editFrame, text="Horizontal", width=20, height=3, anchor="w", font=('Arial', 12))
         mode.grid(row=0, column=0, columnspan=2, padx=10)
         editedImg = img
-        persX = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        persX = Scale(editFrame, from_=-100, to=100, orient='horizontal', length=300, command=controlPers)
         persX.grid(row=1, column=0, columnspan=3)
         persX.set(0)
         mode2 = Label(editFrame, text="Vertical", width=20, height=3, anchor="w", font=('Arial', 12))
         mode2.grid(row=2, column=0, columnspan=2, padx=10)    
-        persY = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        persY = Scale(editFrame, from_=-100, to=100, orient='horizontal', length=300, command=controlPers)
         persY.grid(row=3, column=0, columnspan=3)
-        persX.set(0)
-    showImg()
+        persY.set(0)
+    showImg(img)
+
+# 밝기 조절
+def controlBrig(value):
+    global editedImg, img
+    brig = int(value)
+    editedImg = cv.add(img, np.array([brig, brig, brig, 0], dtype=np.float64))
+    showImg(editedImg)
 
 def brigImg(btn):
     global editFrame, editedImg, img
@@ -184,10 +222,10 @@ def brigImg(btn):
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
         editedImg = img
-        brigScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        brigScale = Scale(editFrame, from_=-150, to=150, orient='horizontal', length=300, command=controlBrig)
         brigScale.grid(row=1, column=0, columnspan=3)
         brigScale.set(0)
-    showImg()
+    showImg(img)
     
 def contImg(btn):
     global editFrame, editedImg, img
@@ -198,7 +236,7 @@ def contImg(btn):
         contScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
         contScale.grid(row=1, column=0, columnspan=3)
         contScale.set(0)
-    showImg()
+    showImg(img)
     
 def expoImg(btn):
     global editFrame, editedImg, img
@@ -209,7 +247,7 @@ def expoImg(btn):
         expoScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
         expoScale.grid(row=1, column=0, columnspan=3)
         expoScale.set(0)
-    showImg()
+    showImg(img)
     
 def satuImg(btn):
     global editFrame, editedImg, img
@@ -220,7 +258,7 @@ def satuImg(btn):
         satuScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
         satuScale.grid(row=1, column=0, columnspan=3)
         satuScale.set(0)
-    showImg()
+    showImg(img)
 
 def highImg(btn):
     global editFrame, editedImg, img
@@ -231,7 +269,7 @@ def highImg(btn):
         highScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
         highScale.grid(row=1, column=0, columnspan=3)
         highScale.set(0)
-    showImg()
+    showImg(img)
     
 def shadImg(btn):
     global editFrame, editedImg, img
@@ -242,7 +280,7 @@ def shadImg(btn):
         shadScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
         shadScale.grid(row=1, column=0, columnspan=3)
         shadScale.set(0)
-    showImg()
+    showImg(img)
     
 def sharImg(btn):
     global editFrame, editedImg, img
@@ -253,7 +291,7 @@ def sharImg(btn):
         sharScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
         sharScale.grid(row=1, column=0, columnspan=3)
         sharScale.set(0)
-    showImg()
+    showImg(img)
 
 def blurImg(btn):
     global editFrame, editedImg, img
@@ -264,7 +302,7 @@ def blurImg(btn):
         blurScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
         blurScale.grid(row=1, column=0, columnspan=3)
         blurScale.set(0)
-    showImg()
+    showImg(img)
     
 def grayImg(btn):
     global editFrame, editedImg, img
@@ -275,7 +313,7 @@ def grayImg(btn):
         grayScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
         grayScale.grid(row=1, column=0, columnspan=3)
         grayScale.set(0)
-    showImg()
+    showImg(img)
     
 def photoEditor():
     global editFrame
