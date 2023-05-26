@@ -33,8 +33,8 @@ def openImg(): # file Path 탐색 및 이미지 열기
         showImg(img)
 
 def showImg(img): # 이미지 크기 조절, 보여주기
-    global canvas, ratio, startx, starty, endx, endy, showingImg
-    # show_image -> 사용자에게 보여주는 이미지, resize
+    global canvas, ratio, startx, starty, endx, endy
+    # showingImg -> 사용자에게 보여주는 이미지, resize
     showingImg = img
 
     height, width = img.shape[:2]
@@ -66,7 +66,6 @@ isGray = False
 top, bottom = (0, 0), (0, 0)
 
 def clearFrame():
-    global editFrame
     for widget in editFrame.winfo_children():
         widget.destroy()
 
@@ -88,18 +87,19 @@ def changeColor(btn): # button up&down
         
 # Select area & Crop
 def startRectangle(event):
-    global top, bottom, area, canvas
+    global top, area
     if not area:
         top = (event.x, event.y)
         area = True
 
 def drawRectangle(event):
-    global top, bottom, area, canvas
+    global bottom, canvas, area
     if area:
         bottom = (event.x, event.y)
         canvas.delete("rectangle")
         if top!=(0, 0):
             canvas.create_rectangle(top[0], top[1], event.x, event.y, outline="white", width=2, tags="rectangle")
+            area = False
 
 def areaImg(btn): # 이미지 영역 선택
     global area, top, bottom, canvas
@@ -117,7 +117,7 @@ def areaImg(btn): # 이미지 영역 선택
         canvas.delete("rectangle")
     
 def cropImg(btn, areaBtn): # 이미지 자르기
-    global img, top, bottom, ratio, area, curBtn
+    global img, top, bottom, area, curBtn
     
     clearFrame()
     
@@ -166,7 +166,7 @@ def makeEndMode(btn):
     mode.grid(row=0, column=0, columnspan=2, padx=10)
 
 def finishImg(btn):
-    global curBtn, img, editedImg
+    global curBtn, img
     
     btn["background"] = "#D3D3D3"
     btn["relief"] = "raised"
@@ -178,7 +178,7 @@ def finishImg(btn):
     
 # Perspective 조절
 def controlPers(value):
-    global persX, persY, editedImg, img, ratio
+    global editedImg
     
     persRatio = 2 / ratio
     # 이미지의 크기 및 좌표 계산
@@ -205,7 +205,7 @@ def controlPers(value):
     showImg(editedImg)
 
 def persImg(btn):
-    global editFrame, editedImg, img, persX, persY
+    global editFrame, editedImg, persX, persY
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         endBtn = Button(editFrame, text="OK", width=8, height=2, padx=0, pady=0, relief="raised", font="Arial 9", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:finishImg(btn))
@@ -225,13 +225,13 @@ def persImg(btn):
 
 # Brightness 조절
 def controlBrig(value):
-    global editedImg, img
+    global editedImg
     brig = int(value)
     editedImg = cv.add(img, np.array([brig, brig, brig, 0], dtype=np.float64))
     showImg(editedImg)
 
 def brigImg(btn):
-    global editFrame, editedImg, img
+    global editFrame, editedImg
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
@@ -243,13 +243,13 @@ def brigImg(btn):
     
 # Contrast 조절
 def controlCont(value):
-    global editedImg, img
+    global editedImg
     cont = (int(value) / 100) + 1
     editedImg = cv.addWeighted(img, cont, img, 0, 127*(1-cont))
     showImg(editedImg)
     
 def contImg(btn):
-    global editFrame, editedImg, img
+    global editFrame, editedImg
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
@@ -261,7 +261,7 @@ def contImg(btn):
 
 # Saturation 조절
 def controlSatu(value):
-    global editedImg, img
+    global editedImg
     satu = (int(value) / 50) + 1
     hsvImg = cv.cvtColor(img, cv.COLOR_BGR2HSV)
     hsvImg[:, :, 1] = np.clip(hsvImg[:, :, 1] * satu, 0, 255)
@@ -269,7 +269,7 @@ def controlSatu(value):
     showImg(editedImg)
 
 def satuImg(btn):
-    global editFrame, editedImg, img
+    global editFrame, editedImg
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
@@ -281,7 +281,7 @@ def satuImg(btn):
 
 # Highlight(Bright area) 조절
 def controlHigh(value):
-    global editedImg, img
+    global editedImg
     high = int(int(value) / 5)
     grayImg = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     grayImg = cv.cvtColor(grayImg, cv.COLOR_GRAY2BGR)
@@ -289,7 +289,7 @@ def controlHigh(value):
     showImg(editedImg)
 
 def highImg(btn):
-    global editFrame, editedImg, img
+    global editFrame, editedImg
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
@@ -301,7 +301,7 @@ def highImg(btn):
     
 # Shadow(Dark area) 조절
 def controlShad(value):
-    global editedImg, img
+    global editedImg
     shad = int(int(value) / 5)
     grayImg = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     grayImg = cv.cvtColor(grayImg, cv.COLOR_GRAY2BGR)
@@ -309,7 +309,7 @@ def controlShad(value):
     showImg(editedImg)    
 
 def shadImg(btn):
-    global editFrame, editedImg, img
+    global editFrame, editedImg
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
@@ -321,7 +321,7 @@ def shadImg(btn):
 
 # Sharpening 조절
 def controlShar(value):
-    global editedImg, img, ratio
+    global editedImg
     shar = int(value) / (ratio * 100)
     ker = int(2 / ratio)
     if ker % 2 == 0: ker += 1
@@ -330,7 +330,7 @@ def controlShar(value):
     showImg(editedImg)
     
 def sharImg(btn):
-    global editFrame, editedImg, img
+    global editFrame, editedImg
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
@@ -342,7 +342,7 @@ def sharImg(btn):
 
 # Blur 조절
 def controlBlur(value):
-    global editedImg, img, ratio
+    global editedImg
     blur = int(value)
     ker = int(blur/(ratio * 5))
     if ker % 2 == 0: ker += 1
@@ -350,7 +350,7 @@ def controlBlur(value):
     showImg(editedImg)
 
 def blurImg(btn):
-    global editFrame, editedImg, img
+    global editFrame, editedImg
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
@@ -362,7 +362,7 @@ def blurImg(btn):
 
 # Gray 조절
 def controlGray(value):
-    global editedImg, img
+    global editedImg
     gray = int(value) / 100
     grayImg = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     grayImg = cv.cvtColor(grayImg, cv.COLOR_GRAY2BGR)
@@ -370,7 +370,7 @@ def controlGray(value):
     showImg(editedImg)
 
 def grayImg(btn):
-    global editFrame, editedImg, img
+    global editFrame, editedImg
     
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
