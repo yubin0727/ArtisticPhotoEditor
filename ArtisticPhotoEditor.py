@@ -3,24 +3,37 @@ from tkinter import filedialog
 from PIL import ImageTk, Image
 import cv2 as cv
 import numpy as np
+import os
 MAX_SIZE = 800
+ratio = 1
 
 ## Save & Open Image
 def saveImg(): # 이미지 저장
-    imgPath = filedialog.asksaveasfilename(defaultextension=".jpg", filetypes=[("Image files", "*.png;*.jpg*.jpeg")])
+    imgPath = filedialog.asksaveasfilename(defaultextension=".jpg", filetypes=(('jpg files', '*.jpg'), ('jpeg files', '*.jpeg'), ('png files', '*.png'), ('all files', '*.*')))
     if imgPath:
-        cv.imwrite(imgPath, img)
+        extension = os.path.splitext(imgPath)[1]
+        ret, img_arr = cv.imencode(extension, img, [cv.IMWRITE_JPEG_QUALITY, 90])
+        if ret:
+            with open(imgPath, mode='w+b') as f:
+                img_arr.tofile(f)
+        #cv.imwrite(imgPath, img)
         
 def openImg(): # file Path 탐색 및 이미지 열기
-    global img, imgPath
+    global img, imgPath, curBtn
+    clearFrame()
+    if curBtn:
+        curBtn["background"] = "#D3D3D3"
+        curBtn["relief"] = "raised"
+    curBtn = None
     imgPath = filedialog.askopenfilename(initialdir="/", title="파일 선택",
                                       filetypes=(('jpg files', '*.jpg'), ('png files', '*.png'), ('all files', '*.*')))
     if imgPath: # 이미지 읽기, 보여주기
-        img = cv.imread(imgPath)
+        img = cv.imdecode(np.fromfile(imgPath, dtype=np.uint8), cv.IMREAD_COLOR)
+        #img = cv.imread(imgPath)
         showImg(img)
 
 def showImg(img): # 이미지 크기 조절, 보여주기
-    global canvas, ratio, startx, starty, endx, endy
+    global canvas, ratio, startx, starty, endx, endy, showingImg
     # show_image -> 사용자에게 보여주는 이미지, resize
     showingImg = img
 
@@ -49,6 +62,7 @@ def showImg(img): # 이미지 크기 조절, 보여주기
 ## Edit Image
 curBtn = None
 area = True
+isGray = False
 top, bottom = (0, 0), (0, 0)
 
 def clearFrame():
@@ -72,7 +86,7 @@ def changeColor(btn): # button up&down
         btn["relief"] = "sunken"
         curBtn=btn
         
-# 이미지 자를 영역 선택, 자르기
+# Select area & Crop
 def startRectangle(event):
     global top, bottom, area, canvas
     if not area:
@@ -130,7 +144,7 @@ def cropImg(btn, areaBtn): # 이미지 자르기
     bottom = (0, 0)
     showImg(img)      
 
-# 이미지 회전
+# Rotation
 def rotaImg(btn):
     global img, curBtn
     
@@ -143,7 +157,7 @@ def rotaImg(btn):
     img = cv.rotate(img, cv.ROTATE_90_CLOCKWISE)
     showImg(img)
 
-# 확인 버튼
+# OK 버튼
 def makeEndMode(btn):
     global editFrame
     endBtn = Button(editFrame, text="OK", width=8, height=2, padx=0, pady=0, relief="raised", font="Arial 9", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:finishImg(btn))
@@ -162,7 +176,7 @@ def finishImg(btn):
     clearFrame()
     showImg(img)
     
-# 원근감 조절
+# Perspective 조절
 def controlPers(value):
     global persX, persY, editedImg, img, ratio
     
@@ -209,7 +223,7 @@ def persImg(btn):
         persY.set(0)
     showImg(img)
 
-# 밝기 조절
+# Brightness 조절
 def controlBrig(value):
     global editedImg, img
     brig = int(value)
@@ -227,38 +241,52 @@ def brigImg(btn):
         brigScale.set(0)
     showImg(img)
     
+# Contrast 조절
+def controlCont(value):
+    global editedImg, img
+    cont = (int(value) / 100) + 1
+    editedImg = cv.addWeighted(img, cont, img, 0, 127*(1-cont))
+    showImg(editedImg)
+    
 def contImg(btn):
     global editFrame, editedImg, img
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
         editedImg = img
-        contScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        contScale = Scale(editFrame, from_=-100, to=100, orient='horizontal', length=300, command=controlCont)
         contScale.grid(row=1, column=0, columnspan=3)
         contScale.set(0)
     showImg(img)
-    
-def expoImg(btn):
-    global editFrame, editedImg, img
-    changeColor(btn)
-    if btn["background"] == "#ECE6CC":
-        makeEndMode(btn)
-        editedImg = img
-        expoScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
-        expoScale.grid(row=1, column=0, columnspan=3)
-        expoScale.set(0)
-    showImg(img)
-    
+
+# Saturation 조절
+def controlSatu(value):
+    global editedImg, img
+    satu = (int(value) / 50) + 1
+    hsvImg = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+    hsvImg[:, :, 1] = np.clip(hsvImg[:, :, 1] * satu, 0, 255)
+    editedImg = cv.cvtColor(hsvImg, cv.COLOR_HSV2BGR)
+    showImg(editedImg)
+
 def satuImg(btn):
     global editFrame, editedImg, img
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
         editedImg = img
-        satuScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        satuScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300, command=controlSatu)
         satuScale.grid(row=1, column=0, columnspan=3)
         satuScale.set(0)
     showImg(img)
+
+# Highlight(Bright area) 조절
+def controlHigh(value):
+    global editedImg, img
+    high = int(int(value) / 5)
+    grayImg = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    grayImg = cv.cvtColor(grayImg, cv.COLOR_GRAY2BGR)
+    editedImg = cv.add(img, np.where(grayImg>128, high, 0), dtype=cv.CV_8U)
+    showImg(editedImg)
 
 def highImg(btn):
     global editFrame, editedImg, img
@@ -266,21 +294,40 @@ def highImg(btn):
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
         editedImg = img
-        highScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        highScale = Scale(editFrame, from_=-100, to=100, orient='horizontal', length=300, command=controlHigh)
         highScale.grid(row=1, column=0, columnspan=3)
         highScale.set(0)
     showImg(img)
     
+# Shadow(Dark area) 조절
+def controlShad(value):
+    global editedImg, img
+    shad = int(int(value) / 5)
+    grayImg = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    grayImg = cv.cvtColor(grayImg, cv.COLOR_GRAY2BGR)
+    editedImg = cv.add(img, np.where(grayImg<=128, shad, 0), dtype=cv.CV_8U)
+    showImg(editedImg)    
+
 def shadImg(btn):
     global editFrame, editedImg, img
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
         editedImg = img
-        shadScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        shadScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300, command=controlShad)
         shadScale.grid(row=1, column=0, columnspan=3)
         shadScale.set(0)
     showImg(img)
+
+# Sharpening 조절
+def controlShar(value):
+    global editedImg, img, ratio
+    shar = int(value) / (ratio * 100)
+    ker = int(2 / ratio)
+    if ker % 2 == 0: ker += 1
+    editedImg = cv.GaussianBlur(img, (ker, ker), 0)
+    editedImg = cv.addWeighted(img, 1 + shar, editedImg, -shar, 0)
+    showImg(editedImg)
     
 def sharImg(btn):
     global editFrame, editedImg, img
@@ -288,10 +335,19 @@ def sharImg(btn):
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
         editedImg = img
-        sharScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        sharScale = Scale(editFrame, from_=0, to=100, orient='horizontal', length=300, command=controlShar)
         sharScale.grid(row=1, column=0, columnspan=3)
         sharScale.set(0)
     showImg(img)
+
+# Blur 조절
+def controlBlur(value):
+    global editedImg, img, ratio
+    blur = int(value)
+    ker = int(blur/(ratio * 5))
+    if ker % 2 == 0: ker += 1
+    editedImg = cv.GaussianBlur(img, (ker, ker), blur / 3)
+    showImg(editedImg)
 
 def blurImg(btn):
     global editFrame, editedImg, img
@@ -299,18 +355,28 @@ def blurImg(btn):
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
         editedImg = img
-        blurScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        blurScale = Scale(editFrame, from_=0, to=100, orient='horizontal', length=300, command=controlBlur)
         blurScale.grid(row=1, column=0, columnspan=3)
         blurScale.set(0)
     showImg(img)
-    
+
+# Gray 조절
+def controlGray(value):
+    global editedImg, img
+    gray = int(value) / 100
+    grayImg = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    grayImg = cv.cvtColor(grayImg, cv.COLOR_GRAY2BGR)
+    editedImg = cv.addWeighted(img, 1-gray, grayImg, gray, 0)
+    showImg(editedImg)
+
 def grayImg(btn):
     global editFrame, editedImg, img
+    
     changeColor(btn)
     if btn["background"] == "#ECE6CC":
         makeEndMode(btn)
         editedImg = img
-        grayScale = Scale(editFrame, from_=-50, to=50, orient='horizontal', length=300)
+        grayScale = Scale(editFrame, from_=0, to=100, orient='horizontal', length=300, command=controlGray)
         grayScale.grid(row=1, column=0, columnspan=3)
         grayScale.set(0)
     showImg(img)
@@ -327,35 +393,32 @@ def photoEditor():
     editFrame.grid(row=10, column=1, rowspan=10, sticky="n")
     
     areaBtn = Button(buttonFrame, text="Area", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:areaImg(areaBtn)) # 이미지 영역 선택
-    areaBtn.grid(row=0, column=0, padx=10, pady=10)
-    cropBtn = Button(buttonFrame, text="Crop", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:cropImg(cropBtn, areaBtn)) # 이미지 자르기    
-    cropBtn.grid(row=0, column=1, padx=10, pady=10)    
-
+    cropBtn = Button(buttonFrame, text="Crop", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:cropImg(cropBtn, areaBtn)) # 이미지 자르기
     rotaBtn = Button(buttonFrame, text="Rotate(Clock)", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10",bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:rotaImg(rotaBtn)) # 이미지 회전
+    areaBtn.grid(row=0, column=0, padx=10, pady=10)    
+    cropBtn.grid(row=0, column=1, padx=10, pady=10)
+    rotaBtn.grid(row=0, column=2, padx=10, pady=10)    
+
     persBtn = Button(buttonFrame, text="Perspective", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10",bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:persImg(persBtn)) # 원근감(수평, 수직)
-    rotaBtn.grid(row=1, column=0, padx=10, pady=10)
-    persBtn.grid(row=1, column=1, padx=10, pady=10)
-    
     brigBtn = Button(buttonFrame, text="Brightness", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:brigImg(brigBtn)) # 밝기
     contBtn = Button(buttonFrame, text="Contrast", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:contImg(contBtn)) # 대비
-    expoBtn = Button(buttonFrame, text="Exposure", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:expoImg(expoBtn)) # 노출
-    brigBtn.grid(row=2, column=0, padx=10, pady=10)
-    contBtn.grid(row=2, column=1, padx=10, pady=10)
-    expoBtn.grid(row=2, column=2, padx=10, pady=10)
+    persBtn.grid(row=1, column=0, padx=10, pady=10)
+    brigBtn.grid(row=1, column=1, padx=10, pady=10)
+    contBtn.grid(row=1, column=2, padx=10, pady=10)
     
     satuBtn = Button(buttonFrame, text="Saturation", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:satuImg(satuBtn)) # 채도
     highBtn = Button(buttonFrame, text="Highlight", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:highImg(highBtn)) # 하이라이트
     shadBtn = Button(buttonFrame, text="Shadow", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:shadImg(shadBtn)) # 그림자
-    satuBtn.grid(row=3, column=0, padx=10, pady=10)
-    highBtn.grid(row=3, column=1, padx=10, pady=10)
-    shadBtn.grid(row=3, column=2, padx=10, pady=10)
+    satuBtn.grid(row=2, column=0, padx=10, pady=10)
+    highBtn.grid(row=2, column=1, padx=10, pady=10)
+    shadBtn.grid(row=2, column=2, padx=10, pady=10)
     
     sharBtn = Button(buttonFrame, text="Sharpness", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:sharImg(sharBtn)) # 선명하게
     blurBtn = Button(buttonFrame, text="Blur", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:blurImg(blurBtn)) # 흐릿하게
     grayBtn = Button(buttonFrame, text="Gray", width=10, height=3, padx=0, pady=0, relief="raised", font="Arial 10", bg="#D3D3D3", activebackground="#ECE6CC", command=lambda:grayImg(grayBtn)) # 그레이
-    sharBtn.grid(row=4, column=0, padx=10, pady=10)
-    blurBtn.grid(row=4, column=1, padx=10, pady=10)
-    grayBtn.grid(row=4, column=2, padx=10, pady=10)
+    sharBtn.grid(row=3, column=0, padx=10, pady=10)
+    blurBtn.grid(row=3, column=1, padx=10, pady=10)
+    grayBtn.grid(row=3, column=2, padx=10, pady=10)
         
     win.config(menu=menubar)
    
